@@ -1,21 +1,17 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock3,
-  Factory,
-  Gem,
-  HeartHandshake,
   Menu,
   MapPin,
   MessageCircle,
   PackageCheck,
   Phone,
   Search,
-  ShieldCheck,
   Sparkles,
-  Truck,
   X,
 } from "lucide-react";
 
@@ -96,21 +92,76 @@ const products = rawProducts.map(([name, family, label, image]) => ({
   details: "Produto do catálogo oficial São Gonçalo",
 }));
 
-const filters = ["Todos", "Urnas", "Pax", "Infantil", "Expositores", "Plano"];
+const filters = ["Urnas", "Pax", "Plano", "Infantil", "Expositores"];
 
 function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 export default function Home() {
-  const [activeFilter, setActiveFilter] = useState("Todos");
+  const [activeFilter, setActiveFilter] = useState("Urnas");
   const [selectedProduct, setSelectedProduct] = useState<(typeof products)[number] | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const visibleProducts = useMemo(
-    () => (activeFilter === "Todos" ? products : products.filter((product) => product.family === activeFilter)),
+    () => products.filter((product) => product.family === activeFilter),
     [activeFilter],
   );
+
+  // Carrossel do catálogo: rolagem horizontal nativa com snap (arrastar no celular)
+  // + botões de anterior/próximo. Celular: 2 produtos por página. Computador: 8 (4 colunas x 2 linhas).
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => setIsDesktop(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  const perPage = isDesktop ? 8 : 2;
+  const catalogPages = useMemo(() => {
+    const pages: (typeof products)[number][][] = [];
+    for (let start = 0; start < visibleProducts.length; start += perPage) {
+      pages.push(visibleProducts.slice(start, start + perPage));
+    }
+    return pages;
+  }, [visibleProducts, perPage]);
+
+  const catalogRef = useRef<HTMLDivElement>(null);
+  const [catalogScroll, setCatalogScroll] = useState({ canPrev: false, canNext: false });
+
+  const updateCatalogScroll = useCallback(() => {
+    const el = catalogRef.current;
+    if (!el) return;
+    const canPrev = el.scrollLeft > 4;
+    const canNext = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setCatalogScroll((current) =>
+      current.canPrev === canPrev && current.canNext === canNext ? current : { canPrev, canNext },
+    );
+  }, []);
+
+  useEffect(() => {
+    const el = catalogRef.current;
+    if (!el) return;
+    el.scrollTo({ left: 0, behavior: "auto" }); // ao trocar de categoria, volta ao início
+    updateCatalogScroll();
+    el.addEventListener("scroll", updateCatalogScroll, { passive: true });
+    const observer = new ResizeObserver(updateCatalogScroll);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateCatalogScroll);
+      observer.disconnect();
+    };
+  }, [activeFilter, perPage, updateCatalogScroll]);
+
+  const scrollCatalog = (direction: 1 | -1) => {
+    const el = catalogRef.current;
+    if (!el) return;
+    const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+    el.scrollBy({ left: direction * (el.clientWidth + gap), behavior: "smooth" });
+  };
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#f4f1ec] text-[#17191b] selection:bg-[#bc9460] selection:text-white">
@@ -135,7 +186,6 @@ export default function Home() {
 
           <nav className="hidden items-center gap-8 text-[11px] font-bold uppercase tracking-[0.16em] text-[#565a5b] lg:flex">
             <a href="#catalogo" className="transition-colors hover:text-[#a77f4b]">Catálogo</a>
-            <a href="#qualidade" className="transition-colors hover:text-[#a77f4b]">Qualidade</a>
             <a href="#empresa" className="transition-colors hover:text-[#a77f4b]">A empresa</a>
             <a href="#contato" className="transition-colors hover:text-[#a77f4b]">Contato</a>
           </nav>
@@ -151,7 +201,7 @@ export default function Home() {
         {mobileMenuOpen && (
           <div className="border-t border-[#17191b]/10 bg-[#f4f1ec] px-5 py-5 lg:hidden">
             <div className="flex flex-col gap-4 text-[11px] font-bold uppercase tracking-[0.16em]">
-              {[['catalogo', 'Catálogo'], ['qualidade', 'Qualidade'], ['empresa', 'A empresa'], ['contato', 'Contato']].map(([id, label]) => (
+              {[['catalogo', 'Catálogo'], ['empresa', 'A empresa'], ['contato', 'Contato']].map(([id, label]) => (
                 <a key={id} href={`#${id}`} onClick={() => setMobileMenuOpen(false)}>{label}</a>
               ))}
             </div>
@@ -163,10 +213,6 @@ export default function Home() {
         <div className="absolute -right-24 -top-28 -z-10 h-[460px] w-[460px] rounded-full bg-[#d4b98f]/30 blur-3xl" />
         <div className="mx-auto grid min-h-[660px] max-w-[1320px] grid-cols-1 items-center gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[0.92fr_1.08fr] lg:gap-16 lg:py-20">
           <div className="relative z-10 max-w-[600px]">
-            <div className="mb-7 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.28em] text-[#a77f4b]">
-              <span className="h-px w-10 bg-[#bc9460]" />
-              Desde Feira de Santana para todo o Brasil
-            </div>
             <h1 className="max-w-[680px] font-serif text-[clamp(3.6rem,7vw,7.7rem)] leading-[0.9] tracking-[-0.065em] text-[#17191b]">
               Respeito em cada <em className="font-normal text-[#a77f4b]">detalhe.</em>
             </h1>
@@ -180,11 +226,6 @@ export default function Home() {
               <a href="https://wa.me/557533225900" target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-3 rounded-full border border-[#17191b]/20 px-6 py-3.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[#17191b] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#a77f4b] hover:text-[#a77f4b]">
                 Falar com a equipe <MessageCircle size={15} />
               </a>
-            </div>
-            <div className="mt-14 grid max-w-[520px] grid-cols-3 gap-5 border-t border-[#17191b]/15 pt-5">
-              <div><strong className="font-serif text-3xl tracking-[-0.05em]">01</strong><span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.13em] text-[#727472]">Tecnologia</span></div>
-              <div><strong className="font-serif text-3xl tracking-[-0.05em]">02</strong><span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.13em] text-[#727472]">Qualidade</span></div>
-              <div><strong className="font-serif text-3xl tracking-[-0.05em]">BR</strong><span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.13em] text-[#727472]">Todo o país</span></div>
             </div>
           </div>
 
@@ -233,7 +274,7 @@ export default function Home() {
             <div className="max-w-[660px]">
               <div className="mb-5 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.28em] text-[#a77f4b]"><span className="h-px w-10 bg-[#bc9460]" />Catálogo completo</div>
               <h2 className="font-serif text-[clamp(2.8rem,5vw,5.4rem)] leading-[0.94] tracking-[-0.06em]">Modelos para cada <em className="font-normal text-[#a77f4b]">necessidade.</em></h2>
-              <p className="mt-6 max-w-[520px] text-[15px] leading-7 text-[#6d706f]">Conheça os produtos recentes da São Gonçalo. Consulte nossa equipe para disponibilidade, medidas, acabamento e condições de fornecimento.</p>
+              <p className="mt-6 max-w-[520px] text-[15px] leading-7 text-[#6d706f]">Conheça os produtos da São Gonçalo. Consulte nossa equipe para disponibilidade, medidas, acabamento e condições de fornecimento.</p>
             </div>
             <div className="flex flex-wrap gap-2 lg:justify-end">
               {filters.map((filter) => (
@@ -244,11 +285,19 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-14 grid gap-x-5 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
-            {visibleProducts.map((product, index) => (
-              <article key={product.name} className="group cursor-pointer" onClick={() => setSelectedProduct(product)}>
+          <div role="group" aria-label="Navegar pelos produtos" className={"mt-12 flex justify-end gap-2" + (catalogScroll.canPrev || catalogScroll.canNext ? "" : " invisible")}>
+            <button type="button" aria-label="Produtos anteriores" onClick={() => scrollCatalog(-1)} disabled={!catalogScroll.canPrev} className="grid h-11 w-11 place-items-center rounded-full border border-[#17191b]/15 text-[#17191b] transition-all duration-200 hover:border-[#a77f4b] hover:text-[#a77f4b] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-30"><ChevronLeft size={18} /></button>
+            <button type="button" aria-label="Próximos produtos" onClick={() => scrollCatalog(1)} disabled={!catalogScroll.canNext} className="grid h-11 w-11 place-items-center rounded-full border border-[#17191b]/15 text-[#17191b] transition-all duration-200 hover:border-[#a77f4b] hover:text-[#a77f4b] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-30"><ChevronRight size={18} /></button>
+          </div>
+          <div ref={catalogRef} role="region" aria-label="Catálogo de produtos" className="mt-6 flex snap-x snap-mandatory gap-x-4 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] lg:gap-x-5 [&::-webkit-scrollbar]:hidden">
+            {catalogPages.map((page, pageIndex) => (
+              <div key={pageIndex} className="grid w-full shrink-0 snap-start grid-cols-2 content-start gap-x-4 lg:grid-cols-4 lg:gap-x-5 lg:gap-y-12">
+                {page.map((product, i) => {
+                  const index = pageIndex * perPage + i;
+                  return (
+              <article key={product.name} className="group min-w-0 cursor-pointer" onClick={() => setSelectedProduct(product)}>
                 <div className="relative aspect-[1.16] overflow-hidden rounded-2xl bg-[#ddd4ca]">
-                  <img src={product.image} alt={product.name} className="h-full w-full object-cover mix-blend-multiply transition duration-500 group-hover:scale-[1.04]" />
+                  <img src={product.image} alt={product.name} className="h-full w-full object-contain p-3 mix-blend-multiply transition duration-500 group-hover:scale-[1.04]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#17191b]/55 via-transparent to-transparent opacity-70" />
                   <span className="absolute left-4 top-4 rounded-full bg-[#f4f1ec]/90 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.15em] text-[#5b5146]">{product.label}</span>
                   <span className="absolute bottom-4 right-4 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-[#17191b] opacity-0 shadow-lg transition duration-200 group-hover:opacity-100"><ArrowUpRight size={16} /></span>
@@ -262,37 +311,12 @@ export default function Home() {
                   <ChevronRight size={18} className="mt-1 shrink-0 text-[#a77f4b]" />
                 </div>
               </article>
+              );
+              })}
+            </div>
             ))}
           </div>
           <div className="mt-16 flex flex-col items-start justify-between gap-5 border-t border-[#17191b]/10 pt-5 text-[11px] text-[#7a7b78] sm:flex-row sm:items-center"><span>Mostrando {visibleProducts.length} de {products.length} modelos do catálogo público.</span><button onClick={() => scrollToId("contato")} className="group inline-flex items-center gap-2 font-bold uppercase tracking-[0.16em] text-[#a77f4b]">Solicitar catálogo completo <ArrowUpRight size={14} className="transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" /></button></div>
-        </div>
-      </section>
-
-      <section id="qualidade" className="scroll-mt-24 bg-[#e6dfd6] px-5 py-24 sm:px-8 lg:py-32">
-        <div className="mx-auto grid max-w-[1320px] items-center gap-14 lg:grid-cols-[0.92fr_1.08fr] lg:gap-20">
-          <div className="relative order-2 lg:order-1">
-            <div className="relative aspect-[0.92] overflow-hidden rounded-[2rem] bg-[#b9a18a] shadow-[0_22px_50px_rgba(64,52,39,0.15)] sm:aspect-[1.08]">
-              <img src={`${imageBase}sao-goncalo-detail_edfc6b3d.jpg`} alt="Textura de madeira e detalhes metálicos de uma urna funerária" className="h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-[#4a3421]/10 mix-blend-multiply" />
-            </div>
-            <div className="absolute -bottom-6 -right-3 max-w-[190px] rounded-2xl bg-[#17191b] p-5 text-white shadow-2xl sm:-right-8"><Gem size={21} className="mb-8 text-[#d7c09f]" /><p className="font-serif text-xl leading-[1.05]">Tecnologia com olhar humano.</p></div>
-          </div>
-          <div className="order-1 lg:order-2">
-            <div className="mb-5 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.28em] text-[#a77f4b]"><span className="h-px w-10 bg-[#bc9460]" />Como fazemos</div>
-            <h2 className="max-w-[640px] font-serif text-[clamp(2.8rem,5vw,5rem)] leading-[0.96] tracking-[-0.06em]">Alta tecnologia.<br /><em className="font-normal text-[#a77f4b]">Mais cuidado.</em></h2>
-            <p className="mt-7 max-w-[560px] text-[15px] leading-7 text-[#666966]">Com equipamentos de última geração e um fluxo de produção moderno, a São Gonçalo segue padrões internacionais de qualidade e otimização de processos.</p>
-            <div className="mt-10 grid gap-6 sm:grid-cols-2">
-              {[
-                [Factory, "Processo produtivo", "Agilidade, velocidade e segurança em cada etapa."],
-                [ShieldCheck, "Padrões de qualidade", "Uma produção preparada para atender com consistência."],
-                [HeartHandshake, "Atendimento próximo", "Tudo para apoiar parceiros e famílias com respeito."],
-                [Truck, "Distribuição nacional", "Entregas em todo o Brasil com planejamento."],
-              ].map(([Icon, title, text]) => {
-                const IconComponent = Icon as typeof Factory;
-                return <div key={title as string} className="border-t border-[#17191b]/15 pt-4"><IconComponent size={20} className="mb-5 text-[#a77f4b]" /><strong className="block text-[12px] font-bold uppercase tracking-[0.13em]">{title as string}</strong><p className="mt-2 text-[12px] leading-5 text-[#777a78]">{text as string}</p></div>;
-              })}
-            </div>
-          </div>
         </div>
       </section>
 
@@ -300,7 +324,7 @@ export default function Home() {
         <div className="mx-auto max-w-[1320px]">
           <div className="grid gap-12 lg:grid-cols-[0.6fr_1.4fr] lg:gap-20">
             <div><div className="mb-5 flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.28em] text-[#d7c09f]"><span className="h-px w-10 bg-[#bc9460]" />São Gonçalo</div><h2 className="font-serif text-[clamp(2.8rem,5vw,5.2rem)] leading-[0.94] tracking-[-0.06em]">Uma indústria<br /><em className="font-normal text-[#d7c09f]">que entrega.</em></h2></div>
-            <div className="grid gap-10 md:grid-cols-2 md:pt-14"><div><p className="font-serif text-[25px] leading-[1.1] text-[#f3ede4]">“Produzindo com a melhor qualidade.”</p><p className="mt-5 max-w-[380px] text-[14px] leading-7 text-[#a9aaa7]">A São Gonçalo une alta tecnologia, fluxo de produção moderno e atendimento próximo para servir o mercado funerário com agilidade e segurança.</p></div><div className="border-l border-[#ffffff]/15 pl-6"><div className="mb-8 flex items-center gap-3 text-[#d7c09f]"><Sparkles size={18} /><span className="text-[10px] font-bold uppercase tracking-[0.2em]">Em números</span></div><div className="grid grid-cols-2 gap-y-8"><div><strong className="font-serif text-4xl">08</strong><span className="mt-1 block text-[10px] uppercase tracking-[0.14em] text-[#a9aaa7]">modelos recentes</span></div><div><strong className="font-serif text-4xl">BR</strong><span className="mt-1 block text-[10px] uppercase tracking-[0.14em] text-[#a9aaa7]">entrega nacional</span></div><div><strong className="font-serif text-4xl">BA</strong><span className="mt-1 block text-[10px] uppercase tracking-[0.14em] text-[#a9aaa7]">base produtiva</span></div><div><strong className="font-serif text-4xl">24/7</strong><span className="mt-1 block text-[10px] uppercase tracking-[0.14em] text-[#a9aaa7]">respeito sempre</span></div></div></div></div>
+            <div className="grid gap-10 md:grid-cols-2 md:pt-14"><div><p className="font-serif text-[25px] leading-[1.1] text-[#f3ede4]">“Produzindo com a melhor qualidade.”</p><p className="mt-5 max-w-[380px] text-[14px] leading-7 text-[#a9aaa7]">A São Gonçalo une alta tecnologia, fluxo de produção moderno e atendimento próximo para servir o mercado funerário com agilidade e segurança.</p></div><div className="border-l border-[#ffffff]/15 pl-6"><div className="mb-8 flex items-center gap-3 text-[#d7c09f]"><Sparkles size={18} /><span className="text-[10px] font-bold uppercase tracking-[0.2em]">Em números</span></div><div className="grid grid-cols-2 gap-y-8"><div><strong className="font-serif text-4xl">BA</strong><span className="mt-1 block text-[10px] uppercase tracking-[0.14em] text-[#a9aaa7]">base produtiva</span></div><div><strong className="font-serif text-4xl">24/7</strong><span className="mt-1 block text-[10px] uppercase tracking-[0.14em] text-[#a9aaa7]">entrega nacional</span></div></div></div></div>
           </div>
         </div>
       </section>
